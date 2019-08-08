@@ -97,6 +97,9 @@ import static com.google.common.base.Preconditions.*;
 public class ECKey implements EncryptableItem {
     private static final Logger log = LoggerFactory.getLogger(ECKey.class);
 
+//    public static native byte[] jniGenerateKeyPair(byte[] seed);
+    public native byte[] jniSign(byte[] transactionHash);
+
     /** Sorts oldest keys first, newest last. */
     public static final Comparator<ECKey> AGE_COMPARATOR = new Comparator<ECKey>() {
 
@@ -134,6 +137,7 @@ public class ECKey implements EncryptableItem {
     private static final SecureRandom secureRandom;
 
     static {
+        System.loadLibrary("bitcoinjSSL");
         // Init proper random number generator, as some old Android installations have bugs that make it unsecure.
         if (Utils.isAndroidRuntime())
             new LinuxSecureRandom();
@@ -660,14 +664,17 @@ public class ECKey implements EncryptableItem {
                 throw new KeyIsEncryptedException();
             return decrypt(aesKey).sign(input);
         } else {
+/*
             // No decryption of private key required.
             if (priv == null)
                 throw new MissingPrivateKeyException();
+*/
         }
         return doSign(input, priv);
     }
 
     protected ECDSASignature doSign(Sha256Hash input, BigInteger privateKeyForSigning) {
+/*
         if (Secp256k1Context.isEnabled()) {
             try {
                 byte[] signature = NativeSecp256k1.sign(
@@ -682,13 +689,23 @@ public class ECKey implements EncryptableItem {
                 throw new RuntimeException(e); // cannot happen
             }
         }
+*/
         if (FAKE_SIGNATURES)
             return TransactionSignature.dummy();
+/*
         checkNotNull(privateKeyForSigning);
         ECDSASigner signer = new ECDSASigner(new HMacDSAKCalculator(new SHA256Digest()));
         ECPrivateKeyParameters privKey = new ECPrivateKeyParameters(privateKeyForSigning, CURVE);
         signer.init(true, privKey);
         BigInteger[] components = signer.generateSignature(input.getBytes());
+*/
+        byte[] i = jniSign(input.getBytes());
+        BigInteger[] components = {
+                new BigInteger(1, Arrays.copyOfRange(i, 0, 32)),
+                new BigInteger(1, Arrays.copyOfRange(i, 32, 32+32))
+        };
+        Arrays.fill(i, (byte) 0);
+
         return new ECDSASignature(components[0], components[1]).toCanonicalised();
     }
 
